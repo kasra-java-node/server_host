@@ -1,4 +1,5 @@
 
+
 const express = require('express');
 const app = express();
 const http = require('http');
@@ -6,6 +7,26 @@ const server = http.createServer(app);
 const { Server, Socket } = require("socket.io");
 const io = new Server(server);
 var crypto = require('crypto');
+
+var mysql = require('mysql');
+
+var con = mysql.createConnection({
+
+  host: "bzd4myhjzeetabtuetly-mysql.services.clever-cloud.com",
+  user: "uc6ope4zm8uyzlpj",
+  password: "ZGPZIlaNAUQA8TCcBRys",
+  port: 3306,
+  database: "bzd4myhjzeetabtuetly"
+
+});
+
+con.connect(function(err) {
+  if (err) throw err;
+
+  //console.log("Connected!");
+
+});
+
 
 var sqlite3 = require('sqlite3').verbose();
 var db = new sqlite3.Database('chillchat.db');
@@ -61,13 +82,12 @@ io.on('connection', function(socket){
     var message_connect = 'Chillchat'
 
     socket.emit('connect_name', {key_connect:message_connect} );
-  
 
     socket.on('singup', function(name, username, password){
 
       var chats_list = "no"
 
-      db.run('INSERT INTO users (name,username,password,chats) VALUES (?,?,?,?) ' , [name , username , password , chats_list ]  ,  function(err) {
+      con.query('INSERT INTO users (name,username,password,chats) VALUES (?,?,?,?) ' , [name , username , password , chats_list ] , function (err, result) {
         
         if (err) {
 
@@ -81,40 +101,44 @@ io.on('connection', function(socket){
           
           socket.emit('successful', {message_ok: message_successful, message_chat: chats_list } );
 
-          db.run('INSERT INTO save_message (chat_name,id_user) VALUES (?,?) ' , ['Saved Message' , username]  ,  function(err) {
+          con.query('INSERT INTO save_message (chat_name,id_user) VALUES (?,?) ' , ['Saved Message' , username] , function (err, result) {
 
           });
 
-          db.run('INSERT INTO channel_news (chat_name,id_user) VALUES (?,?) ' , ['Chillchat News' , username]  ,  function(err) {
+          con.query('INSERT INTO channel_news (chat_name,id_user) VALUES (?,?) ' , ['Chillchat News' , username] , function (err, result) {
 
           });
 
-          db.run('INSERT INTO bots (chat_name,id_user) VALUES (?,?) ' , ['Mr.Friend' , username]  ,  function(err) {
-            
+          con.query('INSERT INTO bots (chat_name,id_user) VALUES (?,?) ' , ['Mr.Friend' , username]  , function (err, result) {
+
           });
+
         }
-      });
+
+      });    
+
   });
 
   socket.on('login', function(username, password) {
 
-    db.each("SELECT name,chats FROM users WHERE username = '"+username+"' AND password = '"+password+"' " ,  function(err, row) {
+    con.query("SELECT name,chats FROM users WHERE username = '"+username+"' AND password = '"+password+"' " , function (err, result, fields) {
 
-      if (row.length > 0) {
-        
-        var message_ok = 'Login was successful ✅'
-        
-        socket.emit('ok_username', {ok_key:row.name} , {chats_key:row.chats} );
-
-      } else {
+      if (result.length == 0) {
 
         var message_error = 'The username or password is incorrect !'
         
         socket.emit('error_username', {error_key:message_error} );
 
+      } else {
+
+        var message_ok = 'Login was successful ✅'
+        
+        socket.emit('ok_username', {ok_key:fields[1].name} , {chats_key:fields[1].chats} );
+
       }
 
     });
+
   });
 
   socket.on('send_message_group' , function(id_messages, id_group ,type, message, user, name, img, time) {
@@ -126,8 +150,8 @@ io.on('connection', function(socket){
     } else {
 
     }
-
-    db.all("INSERT INTO group_messages (id_group,id_message,type_message,message,id_sender_message,name_sender,img_sender,time_sender) VALUES ('"+id_group+"','"+id_messages+"','"+type+"','"+message+"','"+user+"','"+name+"','"+img+"','"+time+"') " , function(err, row) {
+    
+    con.query("INSERT INTO group_messages (id_group,id_message,type_message,message,id_sender_message,name_sender,img_sender,time_sender) VALUES ('"+id_group+"','"+id_messages+"','"+type+"','"+message+"','"+user+"','"+name+"','"+img+"','"+time+"') " , function (err, result) {
 
       io.emit('sended_message_group' ,  { send_id_messages: id_messages , send_id_group: id_group , send_type: type , send_message: message , send_user: user , send_name: name , send_img: img , send_time: time } );
 
@@ -137,9 +161,9 @@ io.on('connection', function(socket){
 
   socket.on('select_details_user', function(username) {
 
-    db.each("SELECT name,image,tag FROM users WHERE username = '"+username+"' " , function(err, row) {
-      
-      socket.emit('send_details_user', { name_user: row.name , image_user: row.image , tag_user: row.tag } );
+    con.query("SELECT name,image,tag FROM users WHERE username = '"+username+"' " , function (err, result, fields) {
+
+      socket.emit('send_details_user', { name_user: fields[1].name , image_user: fields[1].image , tag_user: fields[1].tag } );
     
     });
 
@@ -148,57 +172,57 @@ io.on('connection', function(socket){
 
   socket.on('set_status' , function(id,status) {
 
-    db.run("UPDATE group_members SET status = '"+status+"' WHERE id_user = '"+id+"' " ,  function(err, row) {
+    con.query("UPDATE group_members SET status = '"+status+"' WHERE id_user = '"+id+"' " , function (err, result) {
 
-    });    
+    });
 
   });
 
   socket.on("read_details_group" , function(id_group) {
 
-    db.all("SELECT name_group,id_group,image,user_create,time FROM group_chats WHERE id_group = '"+id_group+"' " , function(err, row) {
+    con.query("SELECT name_group,id_group,image,user_create,time FROM group_chats WHERE id_group = '"+id_group+"' " , function (err, result, fields) {
 
-      if (row.length == 0) {
+      if (result.length == 0) {
 
 
       } else {
         
-        var name = row[0].name_group;
-        var username = row[0].id_group;
-        var image = row[0].image;
-        var user_create = row[0].user_create;
-        var time = row[0].time;
+        var name = fields[1].name_group;
+        var username = fields[1].id_group;
+        var image = fields[1].image;
+        var user_create = fields[1].user_create;
+        var time = fields[1].time;
         
         socket.emit("read_details_grouped", { message_name_group: name , message_username_group: username , message_image_group: image , message_user_create_group: user_create , message_time_group: time } );
       
       }
-    
+
     });
     
   });
 
   socket.on("read_list_chats" , function(id_group) {
 
-    db.each("SELECT * FROM group_messages WHERE id_group = '"+id_group+"' " , function(err, row) {
+    con.query("SELECT * FROM group_messages WHERE id_group = '"+id_group+"' " , function (err, result, fields) {
 
-      if (row.length == 0) {
+      if (result.length == 0) {
 
 
       } else {
         
-        var group = row.id_group;
-        var id_message = row.id_message;
-        var type = row.type_message;
-        var message = row.message;
-        var id_sender_message = row.id_sender_message;
-        var name_sender = row.name_sender;
-        var img_sender = row.img_sender;
-        var time_sender = row.time_sender;
+        var group = fields[1].id_group;
+        var id_message = fields[1].id_message;
+        var type = fields[1].type_message;
+        var message = fields[1].message;
+        var id_sender_message = fields[1].id_sender_message;
+        var name_sender = fields[1].name_sender;
+        var img_sender = fields[1].img_sender;
+        var time_sender = fields[1].time_sender;
         
         socket.emit("read_list_chated", { id_group_list: group , id_message_list: id_message , type_list: type , message_list: message , id_sender_message_list: id_sender_message , name_sender_list: name_sender , img_sender_list: img_sender , time_sender_list: time_sender } );
 
       }
-    
+
     });
     
   });
@@ -206,10 +230,10 @@ io.on('connection', function(socket){
   socket.on('check_id_private_group', function(data) {
 
     var id = "chillchat~group?!://" + crypto.randomBytes(20).toString('hex') ;
+    
+    con.query("SELECT id_group FROM group_chats WHERE id_group = '"+id+"' " , function (err, result, fields) {
 
-    db.all("SELECT id_group FROM group_chats WHERE id_group = '"+id+"' " , function(err, row) {
-
-      if (row.length == 0) {
+      if (result.length == 0) {
 
         socket.emit("checked_id_private_group", {message_id: id} );
 
@@ -220,16 +244,16 @@ io.on('connection', function(socket){
         socket.emit("checked_id_private_group", {message_id: id2} );
 
       }
-    
+
     });
   
   });
 
   socket.on('check_id_group_public', function(id) {
 
-    db.all("SELECT id_group FROM group_chats WHERE id_group = '"+id+"' " , function(err, row) {
+    con.query("SELECT id_group FROM group_chats WHERE id_group = '"+id+"' " , function (err, result, fields) {
 
-      if (row.length == 0) {
+      if (result.length == 0) {
 
         socket.emit("checked_id_public_group", {result_id: id} );
 
@@ -238,7 +262,7 @@ io.on('connection', function(socket){
         socket.emit("checked_id_public_group", {result_id: 'id already exists'} );
 
       }
-    
+
     });
     
   });
@@ -246,38 +270,40 @@ io.on('connection', function(socket){
 
   socket.on('show_save_message', function(username, time) {
 
-    db.each("SELECT id,chat_name,id_user,image FROM save_message WHERE id_user = '"+username+"' " , function(err, row) {
-      
+    con.query("SELECT id,chat_name,id_user,image FROM save_message WHERE id_user = '"+username+"' " , function (err, result, fields) {
+
       var message = 'Saved Message'
       
-      socket.emit('show_saved_message', { message_id: row.id , message_text: message , message_time: time , profile_img: row.image } );
-    
+      socket.emit('show_saved_message', { message_id: fields[1].id , message_text: message , message_time: time , profile_img: fields[1].image } );
+  
     });
+
 });
 
   socket.on('check_select_username', function(username_one,username_two) {
 
-    db.all("SELECT user_one,user_two FROM private_chats WHERE user_one = '"+username_one+"' AND user_two = '"+username_two+"' " , function(err, row) {
-      
-      if (row.length == 0) {
+    con.query("SELECT user_one,user_two FROM private_chats WHERE user_one = '"+username_one+"' AND user_two = '"+username_two+"' " , function (err, result, fields) {
 
-        db.all("SELECT name,username,image,bio,tag FROM users WHERE username = '"+username_two+"' " , function(err, row) {
-          
-          if (row.length == 0) {
+      if (result.length == 0) {
+
+        con.query("SELECT name,username,image,bio,tag FROM users WHERE username = '"+username_two+"' " , function (err, result, fields) {
+
+          if (result.length == 0) {
             
             socket.emit("null_select_user", {message_null:"no user found"} );
         
         } else {
           
-          var name = row[0].name;
-          var username = row[0].username;
-          var image = row[0].image;
-          var bio = row[0].bio;
-          var tag = row[0].tag;
+          var name = fields[1].name;
+          var username = fields[1].username;
+          var image = fields[1].image;
+          var bio = fields[1].bio;
+          var tag = fields[1].tag;
           
           socket.emit("ok_select_user", {message_user_name:name , message_username:username  , message_user_image:image , message_user_bio:bio , message_user_tag:tag  } );
         
         }
+
       });
       
       } else {
@@ -285,30 +311,34 @@ io.on('connection', function(socket){
         socket.emit("null_select_user", {message_null:"have a chat"} );
       
       }
+
     });
+
   });
 
   socket.on('create_private_message', function(username_one,username_two) {
 
-    db.all("INSERT INTO private_chats (user_one,user_two) VALUES ('"+username_one+"','"+username_two+"') " , function(err, row) {
+    con.query("INSERT INTO private_chats (user_one,user_two) VALUES ('"+username_one+"','"+username_two+"') " , function (err, result) {
 
       socket.emit('created_private_message', { message_create: username_two } );
 
     });
+
   });
 
   socket.on('create_group_public', function(name_group,id_group,user_create,time) {
 
-    db.all("INSERT INTO group_chats (name_group,id_group,user_create,time) VALUES ('"+name_group+"','"+id_group+"','"+user_create+"','"+time+"') " , function(err, row) {
+    con.query("INSERT INTO group_chats (name_group,id_group,user_create,time) VALUES ('"+name_group+"','"+id_group+"','"+user_create+"','"+time+"') " , function (err, result) {
 
       socket.emit('created_group_public', { name_created_group_public: name_group , id_created_group_public: id_group , img_created_group_public: image_group , user_created_group_public: user_create , time_group_public: time  } );
 
     });
+
   });
 
   socket.on('create_group_private', function(name_group,id_group,user_create,time) {
 
-    db.all("INSERT INTO group_chats (name_group,id_group,user_create,time) VALUES ('"+name_group+"','"+id_group+"','"+user_create+"','"+time+"') " , function(err, row) {
+    con.query("INSERT INTO group_chats (name_group,id_group,user_create,time) VALUES ('"+name_group+"','"+id_group+"','"+user_create+"','"+time+"') " , function (err, result) {
 
       socket.emit('created_group_private', { name_created_group_private: name_group , id_created_group_private: id_group , img_created_group_private: image_group , user_created_group_private: user_create , time_group_private: time  } );
 
@@ -318,7 +348,7 @@ io.on('connection', function(socket){
 
   socket.on('add_user_member' , function(id,username) {
 
-    db.all("INSERT INTO group_members (id_group,id_user) VALUES ('"+id+"','"+username+"') " , function(err, row) {
+    con.query("INSERT INTO group_members (id_group,id_user) VALUES ('"+id+"','"+username+"') " , function (err, result) {
 
       socket.emit('added_user_member', {message_add : 'added'} );
 
@@ -328,7 +358,7 @@ io.on('connection', function(socket){
 
   socket.on('add_member_group' , function(id,username) {
 
-    db.all("INSERT INTO group_members (id_group,id_user) VALUES ('"+id+"','"+username+"') " , function(err, row) {
+    con.query("INSERT INTO group_members (id_group,id_user) VALUES ('"+id+"','"+username+"') " , function (err, result) {
 
       socket.emit('added_member_group', {message_adds : username} );
 
@@ -338,66 +368,67 @@ io.on('connection', function(socket){
 
   socket.on("send_details_user2", function(username) {
 
-    db.all("SELECT name,image FROM users WHERE username = '"+username+"' " , function(err , row) {
+    con.query("SELECT name,image FROM users WHERE username = '"+username+"' " , function (err, result, fields) {
 
-      
-      socket.emit('sended_details_user2', { message_user_two:username , message_name_usertwo:row[0].name , message_img_usertwo:row[0].image } );
-    
+      socket.emit('sended_details_user2', { message_user_two:username , message_name_usertwo:fields[1].name , message_img_usertwo:fields[1].image } );
+
     });
 
   });
 
   socket.on('show_channel_news', function(username, time) {
 
-    db.each("SELECT id,chat_name,id_user,image FROM channel_news WHERE id_user= '"+username+"' " , function(err, row) {
-      
+    con.query("SELECT id,chat_name,id_user,image FROM channel_news WHERE id_user= '"+username+"' " , function (err, result, fields) {
+
       var message = 'Chillchat News'
       
-      socket.emit('show_channeled_news', { message_id: row.id , message_text: message , message_time: time , profile_img: row.image } );
+      socket.emit('show_channeled_news', { message_id: fields[1].id , message_text: message , message_time: time , profile_img: fields[1].image } );
 
     });
+
   });
 
   socket.on('show_bots', function(username, time) {
 
-    db.each("SELECT id,chat_name,id_user,image FROM bots WHERE id_user= '"+username+"' " , function(err, row) {
-      
+    con.query("SELECT id,chat_name,id_user,image FROM bots WHERE id_user= '"+username+"' " , function (err, result, fields) {
+
       var message = 'Mr.Friend'
       
-      socket.emit('showed_bots', { message_id: row.id , message_text: message , message_time: time , profile_img: row.image } );
+      socket.emit('showed_bots', { message_id: fields[1].id , message_text: message , message_time: time , profile_img: fields[1].image } );
 
     });
+
   });
   
   socket.on('connect_name_group' , function(id) {
 
-    db.each("select count(id_group) from group_members where id_group = '"+id+"' ", function(err, row) {
+    con.query("select count(id_group) from group_members where id_group = '"+id+"' ", function (err, result, fields) {
 
-      var resultArray = Object.values(JSON.parse(JSON.stringify(row)))
+      var resultArray = Object.values(JSON.parse(JSON.stringify(result)))
 
       socket.emit('connected_name_group', {message_member: resultArray[0]} ) ;
-    
-    });
+
+    })
     
   });
 
   socket.on("read_list_groups" , function(username) {
 
-    db.each("select id_group from group_members where id_user = '"+username+"' ", function(err, row) {
+    con.query("select id_group from group_members where id_user = '"+username+"' ", function (err, result, fields) {
 
-      var resultArray = Object.values(JSON.parse(JSON.stringify(row)))
+      var resultArray = Object.values(JSON.parse(JSON.stringify(result)))
     
       socket.emit('readied_list_groups', {message_read: resultArray[0] } ) ;
-    
+
     });
 
   });
 
   socket.on('check_admin_group', function(id,username,type) {
 
-    db.all("SELECT id_group,id_user,status_admin FROM group_members WHERE id_group = '"+id+"' AND id_user = '"+username+"'  " , function(err, row) {
+    con.query("SELECT id_group,id_user,status_admin FROM group_members WHERE id_group = '"+id+"' AND id_user = '"+username+"'  " , function (err, result, fields) {
 
-      if (row[0].status_admin == 'is') {
+      if (fields[1].status_admin == 'is') {
 
         socket.emit('checked_admin_group', { message_admin: 'is admin' , message_type: type } );
 
@@ -413,47 +444,50 @@ io.on('connection', function(socket){
 
   socket.on('status_group' , function(id) {
 
-    db.each("select count(id_group) from group_members where id_group = '"+id+"' and status = '"+'online'+"' ", function(err, row) {
+    con.query("select count(id_group) from group_members where id_group = '"+id+"' and status = '"+'online'+"' ", function (err, result, fields) {
 
-      var resultArray = Object.values(JSON.parse(JSON.stringify(row)))
+      var resultArray = Object.values(JSON.parse(JSON.stringify(result)))
 
       socket.emit('stated_group', {message_online: resultArray[0]} ) ;
-    
+
     });
     
   });
 
   socket.on('check_username_add_member' , function (username , id_group) {
 
-    db.all("SELECT id_group,id_user FROM group_members WHERE id_group= '"+id_group+"' AND id_user = '"+username+"' " , function(err, row) {
-      
-      if (row.length == 0) {
+    con.query("SELECT id_group,id_user FROM group_members WHERE id_group= '"+id_group+"' AND id_user = '"+username+"' " , function (err, result, fields) {
 
-        db.all("SELECT name,username,image,bio,tag FROM users WHERE username = '"+username+"' " , function(err, row) {
-          
-          if (row.length == 0) {
+
+      if (result.length == 0) {
+
+        con.query("SELECT name,username,image,bio,tag FROM users WHERE username = '"+username+"' " , function (err, result, fields) {
+
+          if (result.length == 0) {
             
             socket.emit("null_selected_user", {message_null:"no user found"} );
         
         } else {
           
-          var name = row[0].name;
-          var username = row[0].username;
-          var image = row[0].image;
-          var bio = row[0].bio;
-          var tag = row[0].tag;
+          var name = fields[1].name;
+          var username = fields[1].username;
+          var image = fields[1].image;
+          var bio = fields[1].bio;
+          var tag = fields[1].tag;
           
           socket.emit("checked_username_add_member", {message_user_name:name , message_username:username  , message_user_image:image , message_user_bio:bio , message_user_tag:tag  } );
         
         }
-        
-      });
+
+        });
       
       } else {
         
         socket.emit("null_selected_user", {message_null:"have added"} );
       
       }
+
+
     });
 
   });
@@ -466,7 +500,7 @@ io.on('connection', function(socket){
 
   socket.on('change_message_group', function(id_group, id_message, new_message, username) {
     
-    db.run("UPDATE group_messages SET message = '"+new_message+"' WHERE id_group = '"+id_group+"' AND id_message = '"+id_message+"'   " ,  function(err, row) {
+    con.query("UPDATE group_messages SET message = '"+new_message+"' WHERE id_group = '"+id_group+"' AND id_message = '"+id_message+"'   " , function (err, result) {
 
       io.emit('changed_message_group', { message_username: username  } );
 
@@ -476,10 +510,10 @@ io.on('connection', function(socket){
 
   socket.on('delete_message_group', function(id_group, id_message, username) {
 
-    db.run("DELETE FROM group_messages WHERE id_group = '"+id_group+"' AND id_message = '"+id_message+"' " , function(err, row) {
+    con.query("DELETE FROM group_messages WHERE id_group = '"+id_group+"' AND id_message = '"+id_message+"' " , function (err, result) {
 
       io.emit('deleted_message_group', { message_username: username  } );
-      
+
     });
     
   });
